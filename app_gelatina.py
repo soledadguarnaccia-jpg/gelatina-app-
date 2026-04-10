@@ -1,0 +1,95 @@
+import streamlit as st
+from PIL import Image, ImageDraw, ImageFont, ImageOps
+import textwrap
+from io import BytesIO
+
+st.set_page_config(page_title="Gelatina Noticias", layout="centered")
+st.title("Gelatina Noticias – Generador de Placas")
+
+modo = st.radio("1. Elegí el modo", ["SERIO – Azul/Rojo", "SOLEMNE – Blanco y Negro"], horizontal=True)
+uploaded_file = st.file_uploader("2. Subí la foto 4:5", type=["jpg","png","jpeg"])
+logo_file = st.file_uploader("3. Subí el logo de Gelatina (PNG con fondo transparente)", type=["png"])
+tag = st.text_input("4. Tag / Categoría", "TECNOLOGÍA").upper()
+titulo = st.text_area("5. Titular", "Estudiantes de Universidad de La Rioja crean un robot humanoide")
+bajada = st.text_input("6. Bajada – máx 2 líneas", "Creado por estudiantes riojanos")
+fecha = st.text_input("7. Fecha", "9·4·2026")
+
+if st.button("Generar placa") and uploaded_file:
+    img = Image.open(uploaded_file).convert("RGB")
+    W, H = 1080, 1350
+    
+    # Modo SOLEMNE pasa a B&N
+    if "SOLEMNE" in modo: 
+        img = ImageOps.grayscale(img).convert("RGB")
+    
+    # Ajustar imagen a 65% del alto manteniendo proporción
+    img_ratio = img.width / img.height
+    target_ratio = W / (H * 0.65)
+    if img_ratio > target_ratio:
+        new_width = int(img.height * target_ratio)
+        left = (img.width - new_width) // 2
+        img = img.crop((left, 0, left + new_width, img.height))
+    else:
+        new_height = int(img.width / target_ratio)
+        top = (img.height - new_height) // 2
+        img = img.crop((0, top, img.width, top + new_height))
+    img = img.resize((W, int(H * 0.65)))
+    
+    canvas = Image.new("RGB", (W, H), "#FFFFFF")
+    canvas.paste(img, (0, 0))
+    draw = ImageDraw.Draw(canvas)
+    
+    try:
+        font_tag = ImageFont.truetype("DejaVuSans-Bold.ttf", 32)
+        font_titulo = ImageFont.truetype("DejaVuSans-Bold.ttf", 58)
+        font_bajada = ImageFont.truetype("DejaVuSans.ttf", 36)
+        font_fecha = ImageFont.truetype("DejaVuSans-Bold.ttf", 28)
+    except:
+        font_tag = font_titulo = font_bajada = font_fecha = ImageFont.load_default()
+    
+    zocalo_y = int(H * 0.65)
+    draw.rectangle([(0, zocalo_y), (W, H)], fill="#F8F7F4")
+    
+    # Colores según modo
+    if "SOLEMNE" in modo:
+        color_tag_fondo, color_tag_texto, color_titulo, color_bajada = "#000000", "#FFFFFF", "#000000", "#1E1E1E"
+        draw.rectangle([(0, zocalo_y), (W, zocalo_y + 2)], fill="#000000") # Filete
+    else:
+        color_tag_fondo, color_tag_texto, color_titulo, color_bajada = "#1A237E", "#FFFFFF", "#1E1E1E", "#4A4A4A"
+    
+    # Tag
+    tag_padding = 20
+    tag_bbox = draw.textbbox((0,0), tag, font=font_tag)
+    tag_w, tag_h = tag_bbox[2] + tag_padding*2, tag_bbox[3] + tag_padding
+    draw.rectangle([(40, zocalo_y + 30), (40 + tag_w, zocalo_y + 30 + tag_h)], fill=color_tag_fondo)
+    draw.text((40 + tag_padding, zocalo_y + 30 + tag_padding//2), tag, font=font_tag, fill=color_tag_texto)
+    
+    # Titular
+    y_text = zocalo_y + 30 + tag_h + 30
+    for line in textwrap.wrap(titulo, width=25):
+        draw.text((40, y_text), line, font=font_titulo, fill=color_titulo)
+        y_text += 65
+    
+    # Bajada máx 2 líneas
+    y_text += 10
+    for line in textwrap.wrap(bajada, width=35)[:2]:
+        draw.text((40, y_text), line, font=font_bajada, fill=color_bajada)
+        y_text += 45
+    
+    # Logo de Gelatina
+    if logo_file:
+        logo = Image.open(logo_file).convert("RGBA")
+        logo.thumbnail((120, 120)) # Ajustar tamaño
+        canvas.paste(logo, (40, 40), logo) # El tercer parámetro usa el alpha para transparencia
+    else:
+        draw.text((40, 40), "gelatina", font=font_fecha, fill="white") # Placeholder si no hay logo
+    
+    # Fecha
+    fecha_w = draw.textbbox((0,0), fecha, font=font_fecha)[2]
+    draw.text((W - fecha_w - 40, 40), fecha, font=font_fecha, fill="white")
+    
+    st.image(canvas)
+    buf = BytesIO()
+    canvas.save(buf, format="PNG")
+    nombre_archivo = f"gelatina_{modo.split()[0].lower()}_{tag.lower()}.png"
+    st.download_button("Descargar PNG 1080x1350", buf.getvalue(), nombre_archivo, "image/png")
