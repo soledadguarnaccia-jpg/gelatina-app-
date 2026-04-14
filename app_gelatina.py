@@ -1,6 +1,6 @@
 import streamlit as st
 from pathlib import Path
-from PIL import Image
+from PIL import Image, ImageDraw, ImageFont
 import io
 
 st.set_page_config(page_title="Generador Gelatina", layout="wide")
@@ -9,7 +9,7 @@ st.title("🎨 Generador de Piezas Gelatina")
 st.write("Elegí un logo precargado o subí el tuyo")
 
 # --- CONFIGURACIÓN DE CARPETAS ---
-# Busca logos en la carpeta donde los tenés ahora
+# Carpeta donde tenés los logos ahora
 LOGOS_DIR = Path("activos/logotipos/activos/logotipos")
 
 # --- CARGA DE LOGOS PRECARGADOS ---
@@ -19,10 +19,10 @@ if LOGOS_DIR.exists():
     for archivo in LOGOS_DIR.glob("*.png"):
         if archivo.name == ".gitkeep":
             continue
-        # Limpia el nombre para mostrar: "GELATINA_LOGO AZUL.png" -> "Azul"
+        # Limpia el nombre: "GELATINA_LOGO AZUL.png" -> "Azul"
         nombre_mostrar = archivo.stem.replace("GELATINA_LOGO", "").strip()
         nombre_mostrar = nombre_mostrar.replace("copia", "").strip()
-        if not nombre_mostrar:  # por si queda vacío
+        if not nombre_mostrar:
             nombre_mostrar = archivo.stem
         logos_disponibles[nombre_mostrar.title()] = str(archivo)
 
@@ -43,7 +43,7 @@ with st.sidebar:
             "Logos disponibles:",
             options=list(logos_disponibles.keys())
         )
-        if logo_elegido != "Ninguno":
+        if logo_elegido!= "Ninguno":
             logo_final = logos_disponibles[logo_elegido]
             st.image(logo_final, caption=f"Preview: {logo_elegido}", width=200)
     else:
@@ -55,8 +55,10 @@ with st.sidebar:
     st.divider()
     st.header("2. Texto y estilo")
     texto_principal = st.text_input("Texto principal", "Título Gelatina")
-    color_fondo = st.color_picker("Color de fondo", "#1E1E")
+    # ARREGLADO: hex de 6 dígitos
+    color_fondo = st.color_picker("Color de fondo", "#1E1E1E")
     color_texto = st.color_picker("Color de texto", "#FFFFFF")
+    tamaño_fuente = st.slider("Tamaño de fuente", 20, 120, 60)
 
 # --- ÁREA PRINCIPAL: PREVIEW ---
 col1, col2 = st.columns([2, 1])
@@ -64,26 +66,39 @@ col1, col2 = st.columns([2, 1])
 with col1:
     st.subheader("Preview")
     
-    # Acá va tu lógica de generación de imagen con PIL
-    # Este es un ejemplo base, reemplazalo con tu código
+    # Crear imagen base 1080x1080
     ancho, alto = 1080, 1080
     img_preview = Image.new("RGB", (ancho, alto), color_fondo)
+    draw = ImageDraw.Draw(img_preview)
     
-    # Si hay logo, lo pegamos
+    # Si hay logo, lo pegamos arriba centrado
     if logo_final:
         try:
-            if isinstance(logo_final, str):  # Es un path de logo precargado
-                logo_img = Image.open(logo_final)
-            else:  # Es un archivo subido
-                logo_img = Image.open(logo_final)
+            if isinstance(logo_final, str): # Es un path de logo precargado
+                logo_img = Image.open(logo_final).convert("RGBA")
+            else: # Es un archivo subido
+                logo_img = Image.open(logo_final).convert("RGBA")
             
             # Redimensionar logo a 300px de ancho manteniendo proporción
             logo_img.thumbnail((300, 300))
-            # Pegarlo centrado arriba
             pos_x = (ancho - logo_img.width) // 2
-            img_preview.paste(logo_img, (pos_x, 100), logo_img if logo_img.mode == 'RGBA' else None)
+            img_preview.paste(logo_img, (pos_x, 100), logo_img)
         except Exception as e:
             st.error(f"Error cargando logo: {e}")
+    
+    # Agregar texto centrado
+    try:
+        # Intenta usar una fuente default
+        fuente = ImageFont.load_default()
+        # Para calcular el tamaño del texto
+        bbox = draw.textbbox((0, 0), texto_principal, font=fuente)
+        text_w = bbox[2] - bbox[0]
+        text_h = bbox[3] - bbox[1]
+        text_x = (ancho - text_w) // 2
+        text_y = alto // 2
+        draw.text((text_x, text_y), texto_principal, fill=color_texto, font=fuente)
+    except:
+        pass
     
     # Mostrar preview
     st.image(img_preview)
@@ -107,9 +122,9 @@ with col2:
         for nombre in list(logos_disponibles.keys())[1:]:
             st.write(f"✓ {nombre}")
     else:
-        st.warning("No encontré logos en activos/logotipos/activos/logotipos/")
-        st.caption("Verificá que la ruta sea correcta")
+        st.warning("No encontré logos en la carpeta")
+        st.caption(f"Buscando en: {LOGOS_DIR}")
 
 # --- FOOTER ---
 st.divider()
-st.caption("Hecho con Streamlit | Gelatina App v1.0")
+st.caption("Hecho con Streamlit | Gelatina App v1.1")
